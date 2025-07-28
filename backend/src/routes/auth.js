@@ -8,6 +8,27 @@ const authRouter = express.Router();
 require("dotenv").config();
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// Middleware to verify JWT token
+const authenticateToken = async (req, res, next) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+    
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded._id);
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+    
+    req.user = user;
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+};
+
 authRouter.post("/signup", async (req, res) => {
   try {
     validateSignupData(req);
@@ -60,6 +81,22 @@ authRouter.post("/login", async (req, res) => {
   } catch (err) {
     res.status(400).send(err.message);
   }
+});
+
+// Get user profile (for persistence)
+authRouter.get("/profile", authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Logout endpoint
+authRouter.post("/logout", (req, res) => {
+  res.clearCookie('token');
+  res.json({ message: 'Logged out successfully' });
 });
 
 module.exports = authRouter;
